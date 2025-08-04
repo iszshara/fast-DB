@@ -41,10 +41,12 @@ struct Table {
     pub fields: HashMap<String, ColumnType>,
     pub columns: HashMap<String, Vec<DataType>>,
     pub select_columns: Vec<String>,
+    pub row_count: usize,
 }
 
 impl Table {
     fn save_data(&mut self, data: HashMap<String, DataType>) -> Result<(), DbError> {
+        let row = self.columns.values().next().map(|v| v.len()).unwrap_or(0);
         for (column_name, value) in &data {
             if let Some(expected) = self.fields.get(column_name) {
                 match (expected, value) {
@@ -67,6 +69,16 @@ impl Table {
                         });
                     }
                 }
+                let duplicate = self.columns.values().all(|v| v.len() > row);
+                if duplicate {
+                    return Err(DbError {
+                        table: self.name.clone(),
+                        column: column_name.clone(),
+                        row,
+                        value: value.clone(),
+                        kind: DatabaseError::DuplicateEntry,
+                    });
+                }
                 let column = self.columns.entry(column_name.clone()).or_insert(vec![]);
                 column.push(value.clone());
             } else {
@@ -87,4 +99,13 @@ impl Table {
     }
 }
 
+fn default_value_column_type(col_type: &ColumnType) -> DataType {
+    match col_type {
+        ColumnType::Bool => DataType::Bool(false),
+        ColumnType::Float => DataType::Float(0.0),
+        ColumnType::Integer => DataType::Integer(0),
+        ColumnType::Text => DataType::Text("".to_string()),
+        ColumnType::UnsignedInteger => DataType::UnsignedInteger(0),
+    }
+}
 fn main() {}

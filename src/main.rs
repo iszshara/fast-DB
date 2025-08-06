@@ -47,6 +47,17 @@ struct Table {
 impl Table {
     fn save_data(&mut self, data: HashMap<String, DataType>) -> Result<(), DbError> {
         let row = self.columns.values().next().map(|v| v.len()).unwrap_or(0);
+        for column_name in self.fields.keys() {
+            //prüft ob die Spalte in data ist
+            if data.contains_key(column_name) {
+            } else {
+                let col_type = self.fields.get(column_name).unwrap(); //holt den ColumnType 
+                let default = default_value_column_type(col_type); //setzt den default Wert
+                let column_vec = self.columns.entry(column_name.clone()).or_insert(vec![]); //Eintrag existiert -> gibt mutable Zugriff auf vorhandenen Vec | Eintrag existiert nicht -> legt neuen mutable Vec an
+                column_vec.push(default);
+            }
+        }
+
         for (column_name, value) in &data {
             if let Some(expected) = self.fields.get(column_name) {
                 match (expected, value) {

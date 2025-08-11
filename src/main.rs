@@ -45,9 +45,22 @@ struct Table {
 }
 
 impl Table {
+    /// Auf Vollständigkeit prüfen  : Ist für jede Spalte in fields auch ein Wert in data vorhanden? -> ja, dann normal weiter; nein, dann mit default Werten auffüllen
+    /// Typenvalidierung            : Für jede Spalte prüfen ob der Datentyp zum ColumnType aus fields passt
+    /// Duplikatsprüfung            : Prüfen, ob die neue Zeile (also die Werte aller Spalten in data), schon existiert oder wenigstens die Länge der Vektoren (vec) übereinstimmen, um Inkonsistenzen zu vermeiden
+    /// Daten Inserten              : Wenn alles passt, sollen die Werte aus data in die jeweiligen Vektoren in Columns gepushed werden
     fn save_data(&mut self, data: HashMap<String, DataType>) -> Result<(), DbError> {
         let row = self.columns.values().next().map(|v| v.len()).unwrap_or(0);
-        for column_name in self.fields.keys() {
+
+        let duplicate = self.columns.values().all(|col_vec| col_vec.len() > row);
+        for (column_name, col_type) in &self.fields {
+            // Prüfen ob in data Werte für die Spalte vorhanden sind
+            if !data.contains_key(column_name) {
+                // Wenn nicht Default-Wert in columns einfügen
+                let default = default_value_column_type(col_type);
+                let column_vec = self.columns.entry(column_name.clone()).or_insert(vec![]);
+                column_vec.push(default);
+            }
             //prüft ob die Spalte in data ist
             if data.contains_key(column_name) {
             } else {
@@ -59,6 +72,7 @@ impl Table {
         }
 
         for (column_name, value) in &data {
+            // Prüfung auf richtigen Datatype
             if let Some(expected) = self.fields.get(column_name) {
                 match (expected, value) {
                     (ColumnType::Text, DataType::Text(_)) => {}
@@ -80,18 +94,6 @@ impl Table {
                         });
                     }
                 }
-                let duplicate = self.columns.values().all(|v| v.len() > row);
-                if duplicate {
-                    return Err(DbError {
-                        table: self.name.clone(),
-                        column: column_name.clone(),
-                        row,
-                        value: value.clone(),
-                        kind: DatabaseError::DuplicateEntry,
-                    });
-                }
-                let column = self.columns.entry(column_name.clone()).or_insert(vec![]);
-                column.push(value.clone());
             } else {
                 return Err(DbError {
                     table: self.name.clone(),
@@ -110,6 +112,7 @@ impl Table {
     }
 }
 
+// Hilfsfunktion für die Default Value
 fn default_value_column_type(col_type: &ColumnType) -> DataType {
     match col_type {
         ColumnType::Bool => DataType::Bool(false),
